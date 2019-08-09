@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop.xsd">
+
+    <context:property-placeholder location="classpath:db.properties"/>
+
+    <!-- druid数据源 -->
+    <bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource" init-method="init" destroy-method="close">
+        <property name="url" value="${jdbc.url}"/>
+        <property name="username" value="${jdbc.username}"/>
+        <property name="password" value="${jdbc.password}"/>
+        <property name="initialSize" value="${jdbc.initialSize}"/>
+        <property name="maxActive" value="${jdbc.maxActive}"/>
+        <property name="proxyFilters">
+            <list>
+                <ref bean="stat-filter" />
+                <ref bean="wall-filter" />
+            </list>
+        </property>
+    </bean>
+
+    <bean id="stat-filter" class="com.alibaba.druid.filter.stat.StatFilter">
+        <property name="slowSqlMillis" value="1000" />
+        <property name="logSlowSql" value="true" />
+        <property name="mergeSql" value="true" />
+    </bean>
+
+    <bean id="wall-filter" class="com.alibaba.druid.wall.WallFilter">
+        <property name="dbType" value="mysql" />
+        <property name="config" ref="wall-filter-config" />
+    </bean>
+
+    <bean id="wall-filter-config" class="com.alibaba.druid.wall.WallConfig">
+        <property name="multiStatementAllow" value="true" />
+    </bean>
+
+    <bean id="druid-stat-interceptor" class="com.alibaba.druid.support.spring.stat.DruidStatInterceptor"/>
+    <bean id="druid-stat-pointcut" class="org.springframework.aop.support.JdkRegexpMethodPointcut" scope="prototype">
+        <property name="patterns">
+            <list>
+                <value>com.promise.security.controller.*</value>
+                <value>com.promise.security.service.*</value>
+            </list>
+        </property>
+    </bean>
+    <aop:config>
+        <aop:advisor advice-ref="druid-stat-interceptor" pointcut-ref="druid-stat-pointcut"/>
+    </aop:config>
+
+    <!-- SqlSessionFactory对象 -->
+    <bean id="sqlSessionFactoryBean" class="com.baomidou.mybatisplus.spring.MybatisSqlSessionFactoryBean">
+        <!-- 主配置文件 -->
+        <property name="configLocation" value="classpath:mybatis-config.xml" />
+        <!-- 数据源 -->
+        <property name="dataSource" ref="dataSource" />
+        <!-- 别名处理 -->
+        <property name="typeAliasesPackage" value="com.promise.security.entity"/>
+        <!-- 注入MybatisPlus 全局配置 -->
+        <property name="globalConfig" ref="globalConfiguration"/>
+        <!-- 插件注册 -->
+        <property name="plugins">
+            <list>
+                <!-- 注册分页插件 -->
+                <bean class="com.baomidou.mybatisplus.plugins.PaginationInterceptor"/>
+            </list>
+        </property>
+    </bean>
+
+    <!-- 定义MybatisPlus的全局定义策略配置:对应了mybatis全局配置文件中的配置-->
+    <bean id="globalConfiguration" class="com.baomidou.mybatisplus.entity.GlobalConfiguration">
+        <!-- 对应mybatis中的mapUnderscoreToCamelCase 开启与数据库字段_对应的驼峰命名，默认为true:开启 -->
+        <property name="dbColumnUnderline" value="true"/>
+        <!-- 全局id生成策略 0：数据库id自增策略；默认是雪花算法 -->
+        <property name="idType" value="0"/>
+        <!-- 注入自定义全局操作 -->
+        <!--<property name="sqlInjector" ref="mysqlInjector"/>-->
+    </bean>
+
+    <!-- 配置扫描Dao接口包，动态实现Dao接口，注入到spring容器中 -->
+    <bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+        <property name="basePackage" value="com.promise.security.dao" />
+    </bean>
+
+</beans>
